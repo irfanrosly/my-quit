@@ -1,0 +1,11 @@
+{
+  "buildCommand": null,
+  "outputDirectory": "build/web",
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ],
+  "public": true
+}
