@@ -115,6 +115,16 @@ class MyQuitMateApp extends StatelessWidget {
       listTileTheme: base.listTileTheme.copyWith(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       ),
+      // Ensure icons are visible with proper theming
+      iconTheme: base.iconTheme.copyWith(
+        size: 24.0,
+        color: base.colorScheme.onSurface,
+      ),
+      // Ensure primary icons (like in action buttons) are visible
+      primaryIconTheme: base.primaryIconTheme.copyWith(
+        size: 24.0,
+        color: base.colorScheme.onPrimary,
+      ),
     );
   }
 }
