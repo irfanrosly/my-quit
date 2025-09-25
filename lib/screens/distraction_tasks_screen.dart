@@ -12,12 +12,18 @@ class DistractionTasksScreen extends StatefulWidget {
 
 class _DistractionTasksScreenState extends State<DistractionTasksScreen> {
   final tasks = const [
-    'Minum air segelas',
-    'Jalan 2 minit',
-    '10 push-ups/squats',
-    'Mesej buddy sokongan',
-    'Makan buah/gula-gula getah',
-    'Baca doa/affirmation',
+    'Do physical activity or exercise',
+    'Drink a glass of water',
+    'Message a support buddy',
+    'Eat fruits/chew gum',
+    'Meditate/pray',
+    'Say a positive affirmation',
+    'Go for a walk',
+    'Relax',
+    'Do household chores',
+    'Play with a stress ball',
+    'Listen to music',
+    'Watch television',
   ];
 
   String? selectedTask;
@@ -90,7 +96,7 @@ class _DistractionTasksScreenState extends State<DistractionTasksScreen> {
           ),
           const SizedBox(height: 12),
 
-          Text('Pilih satu task', style: Theme.of(context).textTheme.titleMedium),
+          Text('Please pick a task', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8, runSpacing: 8,
@@ -107,12 +113,12 @@ class _DistractionTasksScreenState extends State<DistractionTasksScreen> {
           const SizedBox(height: 16),
           Row(
             children: [
-              const Text('Tempoh: '),
+              const Text('Duration: '),
               const SizedBox(width: 8),
               DropdownButton<int>(
                 value: durationSec,
                 items: const [
-                  DropdownMenuItem(value: 60, child: Text('60s (cepat)')),
+                  DropdownMenuItem(value: 60, child: Text('60s (quick)')),
                   DropdownMenuItem(value: 90, child: Text('90s (default)')),
                   DropdownMenuItem(value: 120, child: Text('120s')),
                 ],

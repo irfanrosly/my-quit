@@ -18,20 +18,30 @@ class _QuitPlanScreenState extends State<QuitPlanScreen> {
 
   final Set<String> _motivations = <String>{};
   final Set<String> _triggers = <String>{};
-  final Set<String> _supports = <String>{};
 
   final _formKey = GlobalKey<FormState>();
 
   static const _motivationOpts = <String>[
-    'Health', 'Financial', 'Family', 'Career', 'Lifestyle', 'Religious', 'Sports'
+    'Personal Health',
+    'Family Health',
+    'Smoking-Related Illness',
+    'Financial Savings',
+    'Family Encouragement',
+    'Doctor Encouragement',
+    'Friend Encouragement',
+    'Peer Pressure',
+    'Social Rejection',
+    'Non-Smoker Advocacy',
+    'No-Smoking Signage',
+    'Designated Smoking Areas',
+    'Self-Satisfaction',
+    'Self-Frustration',
+    'Self-Disappointment',
+    'Personal Responsibility'
   ];
   static const _triggerOpts = <String>[
-    'After meals', 'Coffee/Tea', 'Stress/Anger', 'Boredom',
-    'Driving', 'Socializing', 'Alcohol', 'Before sleep'
-  ];
-  static const _supportOpts = <String>[
-    'Buddy check-ins', 'Clinic/Counselor', 'Quitline',
-    'Religious group', 'Exercise group', 'Family reminders'
+    'After meal', 'Stress', 'In the bathroom/toilet', 'During festive season',
+    'Friends/Colleague', 'Live with smokers', 'When feeling bored/sleepy', 'Watching tv'
   ];
 
   @override
@@ -45,7 +55,6 @@ class _QuitPlanScreenState extends State<QuitPlanScreen> {
 
     _motivations..clear()..addAll(plan.motivations);
     _triggers..clear()..addAll(plan.triggers);
-    _supports..clear()..addAll(plan.supports);
   }
 
   Future<void> _pickDate() async {
@@ -77,7 +86,6 @@ class _QuitPlanScreenState extends State<QuitPlanScreen> {
     q.confidence = _confidence.round();
     q.motivations..clear()..addAll(_motivations);
     q.triggers..clear()..addAll(_triggers);
-    q.supports..clear()..addAll(_supports);
 
     prov.notifyPlanUpdated();
 
@@ -132,7 +140,7 @@ class _QuitPlanScreenState extends State<QuitPlanScreen> {
 
                   ListTile(
                     leading: const Icon(Icons.calendar_month),
-                    title: const Text('Quit Date'),
+                    title: const Text('Mark the day you go smoke-free'),
                     subtitle: Text(
                       _quitDate == null
                           ? 'Not set'
@@ -230,22 +238,6 @@ class _QuitPlanScreenState extends State<QuitPlanScreen> {
                     }).toList(),
                   ),
 
-                  const SizedBox(height: 16),
-
-                  const Text('Preferred Support'),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 8, runSpacing: 8,
-                    children: _supportOpts.map((s) {
-                      final sel = _supports.contains(s);
-                      return FilterChip(
-                        selected: sel, label: Text(s),
-                        onSelected: (v) => setState(() {
-                          if (v) _supports.add(s); else _supports.remove(s);
-                        }),
-                      );
-                    }).toList(),
-                  ),
 
                   const SizedBox(height: 24),
 

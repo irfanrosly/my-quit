@@ -54,7 +54,7 @@ class CravingToolkitScreen extends StatelessWidget {
             child: ListTile(
               leading: const Icon(Icons.mood_outlined),
               title: const Text('Mood & Craving Log'),
-              subtitle: const Text('Log emosi & tahap craving harian (+2 pts)'),
+              subtitle: const Text('Track mood and cravings daily (+2 pts)'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () {
                 Navigator.of(context).push(

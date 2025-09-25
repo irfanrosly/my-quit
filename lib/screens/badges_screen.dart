@@ -9,12 +9,12 @@ class BadgesScreen extends StatelessWidget {
   List<_BadgeMeta> get _allBadges => const [
   _BadgeMeta(
     title: 'Day 1: Fresh Start',
-    description: 'Hari pertama bebas rokok — titik mula yang hebat!',
+    description: 'Smoke-free day one – the start of something great.',
     icon: Icons.wb_sunny_outlined,
   ),
   _BadgeMeta(
     title: '72 Hours: Detox Hero',
-    description: '3 hari — nikotin turun, deria rasa & bau bertambah baik.',
+    description: 'Day 3 – breathe easier and feel more energetic',
     icon: Icons.bolt_outlined,
   ),
   _BadgeMeta(
