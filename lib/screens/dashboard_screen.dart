@@ -136,17 +136,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 MaterialPageRoute(builder: (_) => const BadgesScreen()),
               );
             },
-          ),
-          _ActionTile(
-            icon: Icons.mood,
-            color: Colors.teal,
-            label: 'Mood Log',
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const MoodLogScreen()),
-              );
-            },
-          ),
+          )
         ],
       ),
     ],

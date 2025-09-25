@@ -53,15 +53,25 @@ class OnboardingSummaryScreen extends StatelessWidget {
 
     switch (depLabel) {
       case 'Low':
-        tips.add('Focus on behavior strategies and light reminders.');
-        break;
-      case 'Moderate':
         tips.add('Use daily breathing + buddy check-ins.');
         tips.add('Schedule notifications around usual trigger times.');
+        tips.add('Prepare “no thanks, I’m quitting” scripts. *');
+        tips.add('Use distraction tools like a walk or mini-games.');
+        tips.add('Track smoke-free days with fun milestones.');
+        break;
+      case 'Moderate':
+        tips.add('Combine breathing with a craving tracker.');
+        tips.add('Start NRT (patch or gum) as prescribed.');
+        tips.add('Practice “urge surfing” when cravings hit.');
+        tips.add('Weekly reflection journal: wins & struggles.');
+        tips.add('Set “trigger alerts” (post-meal, social outings).');
         break;
       case 'High':
-        tips.add('Intensive urge timers and strong distractions.');
-        tips.add('Consider professional/clinic support if available.');
+        tips.add('Use combo NRT (patch + gum/lozenge) daily.');
+        tips.add('Talk to your quit coach or counselor 2x/week.');
+        tips.add('Schedule medication reminders & log side effects.');
+        tips.add('Emergency “urge SOS” button with coping tools.');
+        tips.add('Roleplay tough situations using refusal scripts.');
         break;
     }
 
