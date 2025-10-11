@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 
+// Services
+import '../services/auth_service.dart';
+
 // Providers
 import '../state/gamification_provider.dart';
 import '../state/onboarding_provider.dart';
@@ -11,7 +14,6 @@ import '../state/onboarding_provider.dart';
 import 'progress_screen.dart';
 import 'craving_toolkit_screen.dart';
 import 'badges_screen.dart';
-import 'mood_log_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -51,6 +53,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
   appBar: AppBar(
     title: const Text('MYQuitMate Dashboard'),
+    actions: [
+      IconButton(
+        icon: const Icon(Icons.logout),
+        tooltip: 'Logout',
+        onPressed: () async {
+          final authService = AuthService();
+          await authService.signOut();
+          if (context.mounted) {
+            Navigator.pushReplacementNamed(context, '/login');
+          }
+        },
+      ),
+    ],
   ),
   body: ListView(
     padding: const EdgeInsets.all(16),

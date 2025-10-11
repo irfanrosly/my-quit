@@ -1,7 +1,11 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
-import 'chatbot/myquitmate_chatbot.dart'; // <— chatBOT
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+
+// Services
+import 'services/auth_service.dart';
 
 // Providers
 import 'state/onboarding_provider.dart';
@@ -9,6 +13,7 @@ import 'state/gamification_provider.dart';
 
 // Screens
 import 'screens/welcome_screen.dart';
+import 'screens/login_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/progress_screen.dart';
 import 'screens/craving_toolkit_screen.dart';
@@ -19,8 +24,14 @@ import 'screens/onboarding/quit_plan_screen.dart';
 import 'screens/onboarding/summary_screen.dart';
 
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Firebase
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
   runApp(const MyQuitMateApp());
 }
 
@@ -38,10 +49,11 @@ class MyQuitMateApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         title: 'MYQuitMate',
         theme: _buildTheme(),
-        initialRoute: '/welcome',
+        home: const AuthWrapper(),
         routes: {
           // Entry
           '/welcome': (_) => const WelcomeScreen(),
+          '/login': (_) => const LoginScreen(),
 
           // Main app
           '/dashboard': (_) => const DashboardScreen(),
@@ -125,6 +137,38 @@ class MyQuitMateApp extends StatelessWidget {
         size: 24.0,
         color: base.colorScheme.onPrimary,
       ),
+    );
+  }
+}
+
+// AuthWrapper to handle authentication state
+class AuthWrapper extends StatelessWidget {
+  const AuthWrapper({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final authService = AuthService();
+
+    return StreamBuilder(
+      stream: authService.authStateChanges,
+      builder: (context, snapshot) {
+        // Show loading while checking auth state
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+
+        // User is logged in
+        if (snapshot.hasData) {
+          return const DashboardScreen();
+        }
+
+        // User is not logged in
+        return const LoginScreen();
+      },
     );
   }
 }
