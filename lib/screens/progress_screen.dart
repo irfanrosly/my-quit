@@ -3,9 +3,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import '../state/gamification_provider.dart';
 import '../state/onboarding_provider.dart';
-import '../screens/badges_screen.dart'; // sesuaikan laluan jika perlu
+import '../screens/badges_screen.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:flutter/services.dart'; // Clipboard fallback
+import 'package:flutter/services.dart';
 
 class ProgressScreen extends StatefulWidget {
   const ProgressScreen({super.key});
@@ -13,14 +13,46 @@ class ProgressScreen extends StatefulWidget {
   State<ProgressScreen> createState() => _ProgressScreenState();
 }
 
-class _ProgressScreenState extends State<ProgressScreen> {
+class _ProgressScreenState extends State<ProgressScreen> with TickerProviderStateMixin {
   int days = 0;
   final int goal = 30;
+  late AnimationController _headerController;
+  late AnimationController _progressController;
+  late AnimationController _cardsController;
+  bool _isCravingManaged = false;
 
   @override
   void initState() {
     super.initState();
+    _headerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _progressController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    );
+    _cardsController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    );
+
     _loadDays();
+    _headerController.forward();
+    Future.delayed(const Duration(milliseconds: 200), () {
+      if (mounted) {
+        _progressController.forward();
+        _cardsController.forward();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _headerController.dispose();
+    _progressController.dispose();
+    _cardsController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadDays() async {
@@ -36,7 +68,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
   Widget build(BuildContext context) {
     final progress = (days / goal).clamp(0.0, 1.0);
 
-    // Sync dengan providers
     final g = context.watch<GamificationProvider>();
     final o = context.watch<OnboardingProvider>();
     final double moneySaved = (o.state.habits.dailyCost) * days;
@@ -45,42 +76,263 @@ class _ProgressScreenState extends State<ProgressScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Progress"),
-        centerTitle: false,
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.share),
+            tooltip: 'Share Progress',
+            onPressed: () {
+              HapticFeedback.mediumImpact();
+              _shareProgress(context);
+            },
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          
-
-          // Header / Streak
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF2FBF71), Color(0xFF7BE495)],
-              ),
-              borderRadius: BorderRadius.circular(20),
+          // Header / Streak with animation
+          ScaleTransition(
+            scale: Tween<double>(begin: 0.8, end: 1.0).animate(
+              CurvedAnimation(parent: _headerController, curve: Curves.elasticOut),
             ),
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF2FBF71), Color(0xFF7BE495)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF2FBF71).withOpacity(0.3),
+                    blurRadius: 16,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.25),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.local_fire_department, color: Colors.white, size: 32),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Smoke-Free Streak',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.9),
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '$days',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 48,
+                                fontWeight: FontWeight.w900,
+                                height: 1,
+                              ),
+                            ),
+                            Text(
+                              days == 1 ? 'day' : 'days',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.9),
+                                fontSize: 18,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Column(
+                          children: [
+                            const Icon(Icons.emoji_events, color: Colors.white, size: 24),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${g.totalPoints}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              'pts',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.8),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // Health Progress with animation
+          FadeTransition(
+            opacity: _progressController,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.3),
+                end: Offset.zero,
+              ).animate(CurvedAnimation(parent: _progressController, curve: Curves.easeOut)),
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.blue.shade100, width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.blue.withOpacity(0.1),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(Icons.health_and_safety, color: Colors.blue.shade700, size: 24),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Health Progress',
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Goal: $goal days',
+                                style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          '${(progress * 100).toInt()}%',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Stack(
+                      children: [
+                        Container(
+                          height: 16,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade200,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        AnimatedBuilder(
+                          animation: _progressController,
+                          builder: (context, child) {
+                            return FractionallySizedBox(
+                              widthFactor: progress * _progressController.value,
+                              child: Container(
+                                height: 16,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [Colors.blue.shade400, Colors.blue.shade600],
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.blue.withOpacity(0.3),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('$days days', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                        Text('$goal days', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Savings & Points grid
+          FadeTransition(
+            opacity: _cardsController,
             child: Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    shape: BoxShape.circle,
+                Expanded(
+                  child: _StatBox(
+                    icon: Icons.savings_outlined,
+                    label: 'Money Saved',
+                    value: 'RM ${moneySaved.toStringAsFixed(2)}',
+                    color: Colors.green,
                   ),
-                  child: const Icon(Icons.calendar_month, color: Colors.white, size: 28),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('Smoke-free Streak', style: TextStyle(color: Colors.white70)),
-                    const SizedBox(height: 4),
-                    Text('$days day(s)',
-                        style: const TextStyle(
-                          color: Colors.white, fontSize: 28, fontWeight: FontWeight.w700,
-                        )),
-                  ]),
+                  child: _StatBox(
+                    icon: Icons.whatshot,
+                    label: 'Cravings',
+                    value: '${g.cravingsManaged}',
+                    color: Colors.orange,
+                  ),
                 ),
               ],
             ),
@@ -88,204 +340,431 @@ class _ProgressScreenState extends State<ProgressScreen> {
 
           const SizedBox(height: 16),
 
-          // Health Progress
-          Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Row(children: [
-                  Icon(Icons.health_and_safety),
-                  SizedBox(width: 8),
-                  Text('Health Progress'),
-                ]),
-                const SizedBox(height: 12),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: LinearProgressIndicator(value: progress, minHeight: 12),
+          // Quick action - Managed craving
+          FadeTransition(
+            opacity: _cardsController,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: _isCravingManaged
+                      ? [Colors.green.shade400, Colors.green.shade500]
+                      : [Colors.purple.shade400, Colors.purple.shade500],
                 ),
-                const SizedBox(height: 8),
-                Text('Goal: $goal days • Current: $days'),
-              ]),
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // Savings & Points
-          Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Row(children: [
-                  Icon(Icons.savings_outlined),
-                  SizedBox(width: 8),
-                  Text('Savings & Points'),
-                ]),
-                const SizedBox(height: 12),
-                Text('Money Saved: RM ${moneySaved.toStringAsFixed(2)}'),
-                const SizedBox(height: 4),
-                Text('Base Points (days+RM): ${g.basePoints}'),
-                Text('Extra Points: ${g.extraPoints}'),
-                Text('Cravings Managed: ${g.cravingsManaged}'),
-                Text(
-                  'Total Points: ${g.totalPoints}',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ]),
-            ),
-          ),
-
-          // Weekly Recap
-          Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Row(children: [
-                  Icon(Icons.calendar_view_week),
-                  SizedBox(width: 8),
-                  Text('This Week'),
-                ]),
-                const SizedBox(height: 12),
-                Text('Smoke-Free Days (this week est.): '
-                    '${DateTime.now().weekday < g.smokeFreeDays ? DateTime.now().weekday : g.smokeFreeDays} / 7'),
-                Text('Money Saved (this week): RM ${g.weeklyMoneySaved.toStringAsFixed(2)}'),
-                Text('Extra Points (this week): ${g.weeklyExtraPoints}'),
-                Text(
-                  'Weekly Total Points: ${g.weeklyTotalPoints}',
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ]),
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // Achievements + "I managed a craving"
-          Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Row(children: [
-                  Icon(Icons.emoji_events_outlined),
-                  SizedBox(width: 8),
-                  Text('Achievements'),
-                ]),
-                const SizedBox(height: 12),
-                if (g.badges.isEmpty)
-                  const Text('No badges yet — keep going!')
-                else
-                  Wrap(
-                    spacing: 8, runSpacing: 8,
-                    children: g.badges
-                        .map((b) => Chip(
-                              avatar: const Icon(Icons.emoji_events, size: 18),
-                              label: Text(b),
-                            ))
-                        .toList(),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: (_isCravingManaged ? Colors.green : Colors.purple).withOpacity(0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
                   ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: () => context.read<GamificationProvider>().addCravingManaged(),
-                  icon: const Icon(Icons.self_improvement_outlined),
-                  label: const Text('I managed a craving'),
-                ),
-                const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const BadgesScreen()),
-                    );
-                  },
-                  icon: const Icon(Icons.emoji_events),
-                  label: const Text('View All Badges'),
-                ),
-              ]),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.3),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      _isCravingManaged ? Icons.check_circle : Icons.self_improvement_outlined,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _isCravingManaged ? 'Great job!' : 'Feeling a craving?',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _isCravingManaged
+                              ? 'You managed it successfully!'
+                              : 'Tap to log your victory',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.9),
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (!_isCravingManaged)
+                    FilledButton(
+                      onPressed: () async {
+                        HapticFeedback.heavyImpact();
+                        await context.read<GamificationProvider>().addCravingManaged();
+                        setState(() => _isCravingManaged = true);
+                        Future.delayed(const Duration(seconds: 2), () {
+                          if (mounted) setState(() => _isCravingManaged = false);
+                        });
+                      },
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: Colors.purple.shade700,
+                      ),
+                      child: const Text('I Did It!'),
+                    ),
+                ],
+              ),
             ),
           ),
 
           const SizedBox(height: 16),
 
-          // Milestones
-          Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            child: Column(children: [
-              const ListTile(
-                leading: Icon(Icons.emoji_events),
-                title: Text('Milestones'),
-                subtitle: Text('Congratulations for every small step!'),
+          // Achievements
+          FadeTransition(
+            opacity: _cardsController,
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.amber.shade100, width: 2),
               ),
-              const Divider(height: 1),
-              _milestoneTile('24 hours', days >= 1,  'Body starts clearing out leftover dirt and chemicals from smoking in the blood and lungs.'),
-              _milestoneTile('3 days', days >= 3,  'Lungs help with easier breathing, and without nicotine, energy levels begin to rise.'),
-              _milestoneTile('1 week', days >= 7,'Lung function and blood circulation are improving.'),
-              _milestoneTile('1 month', days >= 30,'Lungs begin to heal and breathing becomes easier. Appetite improves.'),
-              const SizedBox(height: 8),
-            ]),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(Icons.emoji_events, color: Colors.amber.shade700, size: 24),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Achievements',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: () {
+                          HapticFeedback.lightImpact();
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const BadgesScreen()),
+                          );
+                        },
+                        child: const Text('View All'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  if (g.badges.isEmpty)
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          children: [
+                            Icon(Icons.emoji_events_outlined, size: 48, color: Colors.grey[400]),
+                            const SizedBox(height: 8),
+                            Text(
+                              'No badges yet — keep going!',
+                              style: TextStyle(color: Colors.grey[600]),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  else
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: g.badges.take(4).map((b) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.amber.shade200),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.emoji_events, size: 18, color: Colors.amber.shade700),
+                              const SizedBox(width: 6),
+                              Text(
+                                b,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey[800],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                ],
+              ),
+            ),
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
 
-          // Action buttons
-          Wrap(
-            spacing: 12, runSpacing: 12,
+          // Milestones header
+          Row(
             children: [
-              OutlinedButton.icon(
-                onPressed: () async {
-                  await context.read<GamificationProvider>().resetAll();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Progress reset (testing)')),
-                  );
-                },
-                icon: const Icon(Icons.restore),
-                label: const Text('Reset Progress (testing)'),
-              ),
-              // Share Progress
-              FilledButton.icon(
-                onPressed: () => _shareProgress(context),
-                icon: const Icon(Icons.share),
-                label: const Text('Share Progress'),
-              ),
-              FilledButton.icon(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.dashboard),
-                label: const Text('Back to Dashboard'),
+              Icon(Icons.flag, size: 20, color: Colors.grey[700]),
+              const SizedBox(width: 8),
+              Text(
+                'Health Milestones',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
               ),
             ],
           ),
+          const SizedBox(height: 4),
+          Text(
+            'Congratulations for every small step!',
+            style: TextStyle(color: Colors.grey[600], fontSize: 14),
+          ),
+          const SizedBox(height: 16),
+
+          // Milestones
+          FadeTransition(
+            opacity: _cardsController,
+            child: Column(
+              children: [
+                _milestoneTile(
+                  '24 Hours',
+                  days >= 1,
+                  'Body starts clearing out leftover dirt and chemicals from smoking in the blood and lungs.',
+                ),
+                const SizedBox(height: 12),
+                _milestoneTile(
+                  '3 Days',
+                  days >= 3,
+                  'Lungs help with easier breathing, and without nicotine, energy levels begin to rise.',
+                ),
+                const SizedBox(height: 12),
+                _milestoneTile(
+                  '1 Week',
+                  days >= 7,
+                  'Lung function and blood circulation are improving.',
+                ),
+                const SizedBox(height: 12),
+                _milestoneTile(
+                  '1 Month',
+                  days >= 30,
+                  'Lungs begin to heal and breathing becomes easier. Appetite improves.',
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // Action buttons
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    Navigator.pop(context);
+                  },
+                  icon: const Icon(Icons.dashboard),
+                  label: const Text('Dashboard'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (days > 0)
+            OutlinedButton.icon(
+              onPressed: () async {
+                HapticFeedback.mediumImpact();
+                await context.read<GamificationProvider>().resetAll();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Progress reset (testing)')),
+                  );
+                }
+              },
+              icon: const Icon(Icons.restore),
+              label: const Text('Reset Progress (testing)'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.grey[600],
+              ),
+            ),
         ],
       ),
     );
   }
 
-  ListTile _milestoneTile(String label, bool unlocked, String note) {
-    return ListTile(
-      leading: Icon(
-        unlocked ? Icons.check_circle : Icons.radio_button_unchecked,
-        color: unlocked ? const Color(0xFF2FBF71) : null,
-      ),
-      title: Text(label),
-      subtitle: Text(note),
-      trailing: Text(
-        unlocked ? 'Unlocked' : 'Locked',
-        style: TextStyle(
-          color: unlocked ? const Color(0xFF2FBF71) : Colors.grey,
-          fontWeight: FontWeight.w600,
+  Widget _milestoneTile(String label, bool unlocked, String note) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: unlocked ? const Color(0xFF2FBF71).withOpacity(0.1) : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: unlocked ? const Color(0xFF2FBF71).withOpacity(0.3) : Colors.grey.shade300,
+          width: 2,
         ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: unlocked ? const Color(0xFF2FBF71) : Colors.grey.shade300,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              unlocked ? Icons.check : Icons.lock_outline,
+              color: Colors.white,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: unlocked ? const Color(0xFF2FBF71) : Colors.grey[700],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: unlocked
+                            ? const Color(0xFF2FBF71).withOpacity(0.2)
+                            : Colors.grey.shade200,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        unlocked ? 'Unlocked' : 'Locked',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: unlocked ? const Color(0xFF2FBF71) : Colors.grey[600],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  note,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey[700],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
+}
 
-  // ====== SHARE HELPERS ======
+// Stat Box Widget
+class _StatBox extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+
+  const _StatBox({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(0.2), width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [color.withOpacity(0.8), color],
+              ),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: Colors.white, size: 24),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ====== Extension on _ProgressScreenState for share helpers ======
+extension on _ProgressScreenState {
   Future<void> _shareProgress(BuildContext context) async {
     final g = context.read<GamificationProvider>();
 
     final msg = _buildShareMessage(
       days: days,
-      moneySaved: g.moneySaved, // guna total; tukar ke g.weeklyMoneySaved jika mahu
+      moneySaved: g.moneySaved,
       totalPoints: g.totalPoints,
       badges: g.badges,
     );
