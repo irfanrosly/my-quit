@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
-import '../services/firestore_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -11,7 +10,6 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _authService = AuthService();
-  final _firestoreService = FirestoreService();
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -38,31 +36,19 @@ class _LoginScreenState extends State<LoginScreen> {
           _passwordController.text,
         );
       } else {
-        // Register
-        final userCredential = await _authService.registerWithEmail(
+        // Register - don't create Firestore document yet
+        // Let the onboarding flow handle that
+        await _authService.registerWithEmail(
           _emailController.text.trim(),
           _passwordController.text,
         );
-
-        // Create initial user profile in Firestore
-        if (userCredential?.user != null) {
-          await _firestoreService.saveUserProfile(
-            userId: userCredential!.user!.uid,
-            data: {
-              'email': _emailController.text.trim(),
-              'createdAt': DateTime.now().toIso8601String(),
-              'quitPlan': {
-                'quitDate': DateTime.now().toIso8601String(),
-                'cigarettesPerDay': 10,
-                'pricePerStick': 0.80,
-              },
-            },
-          );
-        }
       }
 
+      // Pop the login screen so AuthWrapper can take over
+      // The AuthWrapper will check if onboarding is complete and redirect accordingly
       if (mounted) {
-        Navigator.pushReplacementNamed(context, '/dashboard');
+        // Use pushNamedAndRemoveUntil to go back to root and let AuthWrapper handle routing
+        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
       }
     } catch (e) {
       if (mounted) {

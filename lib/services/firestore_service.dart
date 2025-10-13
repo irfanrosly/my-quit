@@ -29,6 +29,33 @@ class FirestoreService {
     }
   }
 
+  // Check if user has completed onboarding/profile setup
+  Future<bool> hasCompletedOnboarding(String userId) async {
+    try {
+      final doc = await _firestore.collection('users').doc(userId).get();
+
+      // If document doesn't exist, user hasn't completed onboarding
+      if (!doc.exists) {
+        return false;
+      }
+
+      final data = doc.data();
+      if (data == null) {
+        return false;
+      }
+
+      // Check if essential profile fields are present
+      // These should be set during the onboarding flow
+      final hasName = data['name'] != null && (data['name'] as String).isNotEmpty;
+      final hasOnboardingComplete = data['onboardingComplete'] == true;
+
+      return hasName && hasOnboardingComplete;
+    } catch (e) {
+      // If there's an error, assume onboarding not completed
+      return false;
+    }
+  }
+
   // Stream user profile (real-time updates)
   Stream<DocumentSnapshot<Map<String, dynamic>>> getUserProfileStream(String userId) {
     return _firestore.collection('users').doc(userId).snapshots();

@@ -6,6 +6,7 @@ import 'firebase_options.dart';
 
 // Services
 import 'services/auth_service.dart';
+import 'services/firestore_service.dart';
 
 // Providers
 import 'state/onboarding_provider.dart';
@@ -163,12 +164,41 @@ class AuthWrapper extends StatelessWidget {
 
         // User is logged in
         if (snapshot.hasData) {
-          return const DashboardScreen();
+          final user = snapshot.data!;
+          return FutureBuilder<bool>(
+            future: _checkOnboardingStatus(user.uid),
+            builder: (context, onboardingSnapshot) {
+              // Show loading while checking onboarding status
+              if (onboardingSnapshot.connectionState == ConnectionState.waiting) {
+                return const Scaffold(
+                  body: Center(
+                    child: CircularProgressIndicator(),
+                  ),
+                );
+              }
+
+              // Check if user has completed onboarding
+              final hasCompletedOnboarding = onboardingSnapshot.data ?? false;
+
+              if (hasCompletedOnboarding) {
+                // User has completed onboarding, go to dashboard
+                return const DashboardScreen();
+              } else {
+                // First-time user, redirect to profile setup
+                return const ProfileSetupScreen();
+              }
+            },
+          );
         }
 
         // User is not logged in
         return const LoginScreen();
       },
     );
+  }
+
+  Future<bool> _checkOnboardingStatus(String userId) async {
+    final firestoreService = FirestoreService();
+    return await firestoreService.hasCompletedOnboarding(userId);
   }
 }
