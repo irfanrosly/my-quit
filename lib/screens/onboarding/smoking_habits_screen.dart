@@ -159,9 +159,11 @@ class _SmokingHabitsScreenState extends State<SmokingHabitsScreen> {
                         .map((x) => DropdownMenuItem(value: x, child: Text(_labelTTFC(x))))
                         .toList(),
                     onChanged: (v) => setState(() => _ttfc = v),
-                    decoration: const InputDecoration(
-                      labelText: 'Time to first cigarette (TTFC)',
-                      prefixIcon: Icon(Icons.timer_outlined),
+                    decoration: InputDecoration(
+                      labelText: _usesVape() && !_usesCigarette() 
+                          ? 'Time to first vape (TTFV)'
+                          : 'Time to first cigarette (TTFC)',
+                      prefixIcon: const Icon(Icons.timer_outlined),
                     ),
                   ),
 

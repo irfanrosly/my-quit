@@ -1,7 +1,11 @@
-import '../chatbot/myquitmate_chatbot.dart'; // <-- tambah ini
+import '../chatbot/myquitmate_chatbot.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
+
+// Services
+import '../services/auth_service.dart';
 
 // Providers
 import '../state/gamification_provider.dart';
@@ -11,7 +15,6 @@ import '../state/onboarding_provider.dart';
 import 'progress_screen.dart';
 import 'craving_toolkit_screen.dart';
 import 'badges_screen.dart';
-import 'mood_log_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -20,13 +23,54 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _DashboardScreenState extends State<DashboardScreen> with TickerProviderStateMixin {
   int _days = 0;
+  late AnimationController _headerController;
+  late AnimationController _statsController;
+  late List<AnimationController> _actionControllers;
+  bool _isRefreshing = false;
 
   @override
   void initState() {
     super.initState();
+    _headerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _statsController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    );
+    _actionControllers = List.generate(
+      4,
+      (index) => AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 400),
+      ),
+    );
+
     _loadDays();
+    _headerController.forward();
+    _statsController.forward();
+
+    // Staggered animation for action tiles
+    Future.delayed(const Duration(milliseconds: 300), () {
+      for (int i = 0; i < _actionControllers.length; i++) {
+        Future.delayed(Duration(milliseconds: i * 100), () {
+          if (mounted) _actionControllers[i].forward();
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _headerController.dispose();
+    _statsController.dispose();
+    for (var controller in _actionControllers) {
+      controller.dispose();
+    }
+    super.dispose();
   }
 
   Future<void> _loadDays() async {
@@ -43,134 +87,326 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final g = context.watch<GamificationProvider>();
     final o = context.watch<OnboardingProvider>();
 
-    // Pastikan ada nilai yang munasabah untuk papar di dashboard:
-    // - guna provider jika ada (g.smokeFreeDays), kalau 0, fallback pada bacaan local _days
     final daysToShow = (g.smokeFreeDays > 0) ? g.smokeFreeDays : _days;
     final moneySaved = o.state.habits.dailyCost * daysToShow;
 
     return Scaffold(
-  appBar: AppBar(
-    title: const Text('MYQuitMate Dashboard'),
-  ),
-  body: ListView(
-    padding: const EdgeInsets.all(16),
-    children: [
-      // --- Stats ringkas (LIVE) ---
-      _StatCard(
-        title: 'Days Smoke-Free',
-        value: '$daysToShow',
-        subtitle: daysToShow > 0 ? 'Keep it up!' : 'Let’s get started',
-        icon: Icons.calendar_month,
-      ),
-      const SizedBox(height: 12),
-      _StatCard(
-        title: 'Money Saved',
-        value: 'RM ${moneySaved.toStringAsFixed(2)}',
-        subtitle: moneySaved > 0 ? 'Nice progress' : 'Start your quit plan',
-        icon: Icons.savings_outlined,
-      ),
-      const SizedBox(height: 8),
-
-      // (Opsyen) refresh kecil untuk sync semula nilai kalau perlu
-      Align(
-        alignment: Alignment.centerRight,
-        child: TextButton.icon(
-          onPressed: () async {
-            await _loadDays();
-            // sync juga ke provider supaya konsisten di skrin lain
-            context.read<GamificationProvider>()
-              .sync(days: daysToShow, saved: moneySaved);
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Dashboard refreshed')),
-            );
-          },
-          icon: const Icon(Icons.refresh),
-          label: const Text('Refresh'),
-        ),
-      ),
-
-      const SizedBox(height: 8),
-      Text('Quick Actions', style: Theme.of(context).textTheme.titleMedium),
-      const SizedBox(height: 8),
-
-      // --- Actions as Grid (ikon besar) ---
-      GridView.count(
-        crossAxisCount: 2,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        children: [
-          _ActionTile(
-            icon: Icons.insights,
-            color: Colors.blue,
-            label: 'Progress',
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const ProgressScreen()),
-              );
-            },
-          ),
-          _ActionTile(
-            icon: Icons.health_and_safety_outlined,
-            color: Colors.green,
-            label: 'Craving Toolkit',
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const CravingToolkitScreen()),
-              );
-            },
-          ),
-          _ActionTile(
-            icon: Icons.flag,
-            color: Colors.orange,
-            label: 'Start Plan',
-            onTap: () => Navigator.pushNamed(context, '/onboarding/profile'),
-          ),
-          _ActionTile(
-            icon: Icons.emoji_events,
-            color: Colors.purple,
-            label: 'Badges',
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const BadgesScreen()),
-              );
-            },
-          ),
-          _ActionTile(
-            icon: Icons.mood,
-            color: Colors.teal,
-            label: 'Mood Log',
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const MoodLogScreen()),
-              );
+      appBar: AppBar(
+        title: const Text('MYQuitMate'),
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Logout',
+            onPressed: () async {
+              HapticFeedback.mediumImpact();
+              final authService = AuthService();
+              await authService.signOut();
+              if (context.mounted) {
+                Navigator.pushReplacementNamed(context, '/login');
+              }
             },
           ),
         ],
       ),
-    ],
-  ), // <— PERHATIKAN koma ni, penting!
-       // ===== FAB CHATBOT =====
-  floatingActionButton: FloatingActionButton.extended(
-    heroTag: 'chat_fab',
-    onPressed: () {
-  Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (_) => MyQuitMateChatBot(
-        ctx: ChatContext(
-          daysSmokeFree: daysToShow, // <-- nilai dari dashboard awak
-          locale: 'ms',              // atau 'en' kalau nak English
+      body: RefreshIndicator(
+        onRefresh: () async {
+          setState(() => _isRefreshing = true);
+          HapticFeedback.mediumImpact();
+          await _loadDays();
+          context.read<GamificationProvider>().sync(days: daysToShow, saved: moneySaved);
+          await Future.delayed(const Duration(milliseconds: 500));
+          if (mounted) setState(() => _isRefreshing = false);
+          HapticFeedback.lightImpact();
+        },
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            // Welcome header with animation
+            FadeTransition(
+              opacity: _headerController,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, -0.5),
+                  end: Offset.zero,
+                ).animate(CurvedAnimation(
+                  parent: _headerController,
+                  curve: Curves.easeOutCubic,
+                )),
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Theme.of(context).colorScheme.primaryContainer,
+                        Theme.of(context).colorScheme.secondaryContainer,
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.waving_hand,
+                            color: Colors.orange.shade700,
+                            size: 32,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Welcome Back!',
+                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'You\'re doing great on your journey',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              color: Theme.of(context).colorScheme.onPrimaryContainer,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Stats cards with animation
+            FadeTransition(
+              opacity: _statsController,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(-0.5, 0),
+                  end: Offset.zero,
+                ).animate(CurvedAnimation(
+                  parent: _statsController,
+                  curve: Curves.easeOutCubic,
+                )),
+                child: _StatCard(
+                  title: 'Days Smoke-Free',
+                  value: '$daysToShow',
+                  subtitle: daysToShow > 0 ? 'Keep it up!' : 'Let\'s get started',
+                  icon: Icons.calendar_month,
+                  color: Colors.blue,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            FadeTransition(
+              opacity: _statsController,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0.5, 0),
+                  end: Offset.zero,
+                ).animate(CurvedAnimation(
+                  parent: _statsController,
+                  curve: Curves.easeOutCubic,
+                )),
+                child: _StatCard(
+                  title: 'Money Saved',
+                  value: 'RM ${moneySaved.toStringAsFixed(2)}',
+                  subtitle: moneySaved > 0 ? 'Nice progress' : 'Start your quit plan',
+                  icon: Icons.savings_outlined,
+                  color: Colors.green,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Points card
+            FadeTransition(
+              opacity: _statsController,
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.amber.shade300, Colors.amber.shade400],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.amber.withOpacity(0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.3),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.star, color: Colors.white, size: 28),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Total Points',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Keep earning rewards!',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.9),
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      '${g.totalPoints}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Icon(Icons.touch_app, size: 20, color: Colors.grey[700]),
+                const SizedBox(width: 8),
+                Text(
+                  'Quick Actions',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Action tiles grid with staggered animation
+            GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              childAspectRatio: 1.1,
+              children: [
+                _buildAnimatedAction(
+                  0,
+                  Icons.insights,
+                  Colors.blue,
+                  'Progress',
+                  () {
+                    HapticFeedback.lightImpact();
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const ProgressScreen()),
+                    );
+                  },
+                ),
+                _buildAnimatedAction(
+                  1,
+                  Icons.health_and_safety_outlined,
+                  Colors.green,
+                  'Craving Toolkit',
+                  () {
+                    HapticFeedback.lightImpact();
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const CravingToolkitScreen()),
+                    );
+                  },
+                ),
+                _buildAnimatedAction(
+                  2,
+                  Icons.flag,
+                  Colors.orange,
+                  'Start Plan',
+                  () {
+                    HapticFeedback.lightImpact();
+                    Navigator.pushNamed(context, '/onboarding/profile');
+                  },
+                ),
+                _buildAnimatedAction(
+                  3,
+                  Icons.emoji_events,
+                  Colors.purple,
+                  'Badges',
+                  () {
+                    HapticFeedback.lightImpact();
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const BadgesScreen()),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ],
         ),
       ),
-    ),
-  );
-},
-    icon: const Icon(Icons.chat_bubble_rounded),
-    label: const Text('Chat'),
-  ),
-  floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-);
+      floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'chat_fab',
+        onPressed: () {
+          HapticFeedback.mediumImpact();
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => MyQuitMateChatBot(
+                ctx: ChatContext(
+                  daysSmokeFree: daysToShow,
+                  locale: 'ms',
+                ),
+              ),
+            ),
+          );
+        },
+        icon: const Icon(Icons.chat_bubble_rounded),
+        label: const Text('Chat'),
+        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+        foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+    );
+  }
+
+  Widget _buildAnimatedAction(int index, IconData icon, Color color, String label, VoidCallback onTap) {
+    return ScaleTransition(
+      scale: Tween<double>(begin: 0.0, end: 1.0).animate(
+        CurvedAnimation(
+          parent: _actionControllers[index],
+          curve: Curves.elasticOut,
+        ),
+      ),
+      child: _ActionTile(
+        icon: icon,
+        label: label,
+        color: color,
+        onTap: onTap,
+      ),
+    );
   }
 }
 
@@ -180,34 +416,91 @@ class _StatCard extends StatelessWidget {
   final String value;
   final String subtitle;
   final IconData icon;
+  final Color color;
 
   const _StatCard({
     required this.title,
     required this.value,
     required this.subtitle,
     required this.icon,
+    required this.color,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: ListTile(
-        leading: Icon(icon),
-        title: Text(title, style: Theme.of(context).textTheme.titleMedium),
-        subtitle: Text(subtitle),
-        trailing: Text(
-          value,
-          style: Theme.of(context).textTheme.headlineSmall,
-        ),
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withOpacity(0.2), width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.1),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  color.withOpacity(0.8),
+                  color,
+                ],
+              ),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: color.withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Icon(icon, color: Colors.white, size: 32),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey[800],
+                      ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.grey[600],
+                      ),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+          ),
+        ],
       ),
     );
   }
 }
 
 // Reusable Action Tile (ikon besar + label) untuk grid
-class _ActionTile extends StatelessWidget {
+class _ActionTile extends StatefulWidget {
   final IconData icon;
   final String label;
   final Color color;
@@ -221,26 +514,72 @@ class _ActionTile extends StatelessWidget {
   });
 
   @override
+  State<_ActionTile> createState() => _ActionTileState();
+}
+
+class _ActionTileState extends State<_ActionTile> {
+  bool _isPressed = false;
+
+  @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: onTap,
-      child: Card(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        elevation: 2,
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: color.withOpacity(0.1),
-                child: Icon(icon, color: color, size: 28),
-              ),
-              const SizedBox(height: 8),
-              Text(label, style: Theme.of(context).textTheme.bodyMedium),
-            ],
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) {
+        setState(() => _isPressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _isPressed = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        transform: Matrix4.identity()..scale(_isPressed ? 0.95 : 1.0),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: widget.color.withOpacity(0.2),
+            width: 2,
           ),
+          boxShadow: [
+            BoxShadow(
+              color: widget.color.withOpacity(_isPressed ? 0.2 : 0.15),
+              blurRadius: _isPressed ? 8 : 12,
+              offset: Offset(0, _isPressed ? 2 : 6),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    widget.color.withOpacity(0.8),
+                    widget.color,
+                  ],
+                ),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: widget.color.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Icon(widget.icon, color: Colors.white, size: 32),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              widget.label,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[800],
+                  ),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
       ),
     );

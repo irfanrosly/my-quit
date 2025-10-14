@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>API_KEY</key>
+	<string>AIzaSyCzu5S3dl2g4VKKbL6lZl_KJEpXp3c_Cyw</string>
+	<key>GCM_SENDER_ID</key>
+	<string>823407401791</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.example.myquitmate</string>
+	<key>PROJECT_ID</key>
+	<string>myquitmate-41445</string>
+	<key>STORAGE_BUCKET</key>
+	<string>myquitmate-41445.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:823407401791:ios:ecf90f294f2f6b0541918a</string>
+</dict>
+</plist>
