@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../state/gamification_provider.dart';
 import '../state/onboarding_provider.dart';
 import '../screens/badges_screen.dart';
+import '../screens/achievement_testing_screen.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter/services.dart';
 
@@ -592,23 +593,47 @@ class _ProgressScreenState extends State<ProgressScreen> with TickerProviderStat
             ],
           ),
           const SizedBox(height: 8),
-          if (days > 0)
-            OutlinedButton.icon(
-              onPressed: () async {
-                HapticFeedback.mediumImpact();
-                await context.read<GamificationProvider>().resetAll();
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Progress reset (testing)')),
-                  );
-                }
-              },
-              icon: const Icon(Icons.restore),
-              label: const Text('Reset Progress (testing)'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.grey[600],
+
+          // Testing buttons - always visible
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const AchievementTestingScreen()),
+                    );
+                  },
+                  icon: const Icon(Icons.science),
+                  label: const Text('Test Achievements'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.orange[700],
+                    side: BorderSide(color: Colors.orange.shade300, width: 2),
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    HapticFeedback.mediumImpact();
+                    await context.read<GamificationProvider>().resetAll();
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Progress reset (testing)')),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.restore),
+                  label: const Text('Reset All'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.grey[600],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );

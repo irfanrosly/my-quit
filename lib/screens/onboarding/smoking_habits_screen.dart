@@ -83,7 +83,14 @@ class _SmokingHabitsScreenState extends State<SmokingHabitsScreen> {
     h.vapeSessionsPerDay = int.tryParse(_vapeSessionsCtrl.text.trim());
     h.ttfc = _ttfc;
 
-    // NOTE: not writing dailyCost (model computes or remains internal)
+    // Save pricing data for accurate cost calculations
+    if (_usesCigarette()) {
+      h.pricePerPack = double.tryParse(_pricePackCtrl.text.trim());
+    }
+    if (_usesVape()) {
+      h.vapeSpendPerDay = double.tryParse(_vapeSpendDayCtrl.text.trim());
+    }
+
     context.read<OnboardingProvider>().notifyHabitsUpdated();
     Navigator.pushNamed(context, '/onboarding/plan');
   }

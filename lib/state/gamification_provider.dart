@@ -1,6 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../services/achievement_tracker_service.dart';
+import '../services/firebase_achievement_service.dart';
 
 class GamificationProvider extends ChangeNotifier {
   // ---- Live state (di-sync dari UI) ----
@@ -46,8 +49,28 @@ class GamificationProvider extends ChangeNotifier {
   bool _hydrated = false;
   late final Future<void> _init = _loadFromStorage();
 
+  // Achievement tracker
+  final AchievementTrackerService _achievementTracker = AchievementTrackerService();
+  final FirebaseAchievementService _firebaseAchievementService = FirebaseAchievementService();
+
   GamificationProvider() {
     _init; // kick off async load
+    _initializeAchievementTracker();
+  }
+
+  /// Initialize the achievement tracker
+  void _initializeAchievementTracker() {
+    _achievementTracker.initialize();
+  }
+
+  /// Start active tracking of achievements
+  Future<void> startActiveTracking() async {
+    await _achievementTracker.startTracking();
+  }
+
+  /// Stop active tracking
+  void stopActiveTracking() {
+    _achievementTracker.stopTracking();
   }
 
   // ---------- Load & Save ----------
@@ -163,9 +186,60 @@ int get uniqueDaysLogged {
     smokeFreeDays  = days;
     moneySaved     = saved;
     await _ensureWeekBaseline();
+    await _syncTimeBasedBadges(); // Check time-based achievements
     _checkBadges(prevDays: prevDays);
     await _saveToStorage();
     notifyListeners();
+  }
+
+  /// Sync time-based badges from achievement tracker
+  /// HYBRID: Checks both Firebase and local storage
+  Future<void> _syncTimeBasedBadges() async {
+    try {
+      // Get user
+      final user = FirebaseAuth.instance.currentUser;
+      List<String> unlockedIds = [];
+
+      // Try Firebase first if user is logged in
+      if (user != null) {
+        try {
+          unlockedIds = await _firebaseAchievementService.getUnlockedAchievements(user.uid);
+          debugPrint('Synced ${unlockedIds.length} badges from Firebase');
+        } catch (e) {
+          debugPrint('Firebase sync failed, falling back to local: $e');
+        }
+      }
+
+      // Fallback to local storage if Firebase failed or no user
+      if (unlockedIds.isEmpty) {
+        final prefs = await SharedPreferences.getInstance();
+        unlockedIds = prefs.getStringList('unlocked_achievements') ?? <String>[];
+        debugPrint('Using ${unlockedIds.length} badges from local storage');
+      }
+
+      // Map achievement IDs to badge titles
+      final achievementToBadge = {
+        'day_1': '🌱 Day 1: Fresh Start',
+        '72_hours': '⏳ 72 Hours: Detox Hero',
+        '1_week': '🗓️ 1 Week Streak',
+        '2_weeks': '💪 2 Weeks Strong',
+        '1_month': '🌟 1 Month Milestone',
+        '2_months': '🔥 2 Months Momentum',
+        '3_months': '🏆 3 Months Champion',
+        '6_months': '🎯 6 Months Warrior',
+        '1_year': '👑 1 Year Smoke-Free Legend',
+      };
+
+      // Add unlocked achievement badges
+      for (final achievementId in unlockedIds) {
+        final badgeTitle = achievementToBadge[achievementId];
+        if (badgeTitle != null && !badges.contains(badgeTitle)) {
+          badges.add(badgeTitle);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error syncing time-based badges: $e');
+    }
   }
 
   // ---------- Actions ----------
@@ -240,6 +314,22 @@ int get uniqueDaysLogged {
     if (uniqueDaysLogged >= 30 && !has("30 Days Logged")) { add("30 Days Logged"); }
   }
 
+  // ---------- Get achievement tracker status ----------
+  Future<List<AchievementMilestoneStatus>> getAchievementStatuses() async {
+    return await _achievementTracker.getMilestonesStatus();
+  }
+
+  Future<AchievementMilestone?> getNextMilestone() async {
+    return await _achievementTracker.getNextMilestone();
+  }
+
+  /// Manually check for new achievements (useful for testing)
+  Future<void> checkAchievementsNow() async {
+    await _achievementTracker.checkNow();
+    await _syncTimeBasedBadges();
+    notifyListeners();
+  }
+
   // ---------- Reset for testing ----------
   Future<void> resetAll() async {
     if (!_hydrated) await _init;
@@ -253,8 +343,30 @@ int get uniqueDaysLogged {
     _weekBaselineMoney = 0.0;
     _weekBaselineCravings = 0;
     _logs.clear();
+
+    // Clear achievement tracker data (local)
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('unlocked_achievements');
+
+    // Clear achievement data from Firebase
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        await _firebaseAchievementService.resetAllAchievements(user.uid);
+        debugPrint('Reset Firebase achievements for user ${user.uid}');
+      } catch (e) {
+        debugPrint('Error resetting Firebase achievements: $e');
+      }
+    }
+
     await _saveToStorage();
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _achievementTracker.dispose();
+    super.dispose();
   }
 }
 

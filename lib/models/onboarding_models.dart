@@ -3,7 +3,7 @@
 // lib/models/onboarding_models.dart
 
 // --- Enums asas (boleh tambah kemudian)
-enum Gender { male, female, preferNot, other }
+enum Gender { male, female }
 enum Education { secondary, diploma, bachelor, master, phd }
 enum TobaccoType { cigarette, handRolled, vape, cigar, shisha, other }
 enum TTFC { within5, m6to30, m31to60, over60 }
@@ -25,10 +25,14 @@ class HabitsData {
   int? cigarettesPerDay;
   int? vapeSessionsPerDay;
   TTFC? ttfc;
-  double? pricePerPack;
-  int cigsPerPack = 20;
 
-  double get dailyCost {
+  // Pricing data
+  double? pricePerPack;         // Price per cigarette pack
+  int cigsPerPack = 20;          // Cigarettes per pack (default 20)
+  double? vapeSpendPerDay;       // Daily vape spending (RM)
+
+  // Calculate daily cigarette cost
+  double get dailyCigCost {
     if (products.contains(TobaccoType.cigarette) &&
         cigarettesPerDay != null &&
         pricePerPack != null &&
@@ -38,8 +42,27 @@ class HabitsData {
     return 0.0;
   }
 
+  // Calculate daily vape cost
+  double get dailyVapeCost {
+    if (products.contains(TobaccoType.vape) && vapeSpendPerDay != null) {
+      return vapeSpendPerDay!;
+    }
+    return 0.0;
+  }
+
+  // Total daily cost (cigarettes + vape)
+  double get dailyCost => dailyCigCost + dailyVapeCost;
+
+  // Monthly and annual costs
   double get monthlyCost => dailyCost * 30;
   double get annualCost => dailyCost * 365;
+
+  // Breakdown for UI display
+  Map<String, double> get costBreakdown => {
+    'cigarettes': dailyCigCost,
+    'vape': dailyVapeCost,
+    'total': dailyCost,
+  };
 }
 
 class QuitPlanData {

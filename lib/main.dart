@@ -7,6 +7,8 @@ import 'firebase_options.dart';
 // Services
 import 'services/auth_service.dart';
 import 'services/firestore_service.dart';
+import 'services/achievement_tracker_service.dart';
+import 'services/achievement_notification_service.dart';
 
 // Providers
 import 'state/onboarding_provider.dart';
@@ -36,17 +38,45 @@ void main() async {
   runApp(const MyQuitMateApp());
 }
 
-class MyQuitMateApp extends StatelessWidget {
+class MyQuitMateApp extends StatefulWidget {
   const MyQuitMateApp({super.key});
+
+  @override
+  State<MyQuitMateApp> createState() => _MyQuitMateAppState();
+}
+
+class _MyQuitMateAppState extends State<MyQuitMateApp> {
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+  final AchievementNotificationService _notificationService = AchievementNotificationService();
+  late GamificationProvider _gamificationProvider;
+
+  @override
+  void initState() {
+    super.initState();
+    _gamificationProvider = GamificationProvider();
+    _initializeServices();
+  }
+
+  void _initializeServices() {
+    // Initialize notification service
+    _notificationService.initialize(_navigatorKey);
+
+    // Set up achievement tracker callback
+    AchievementTrackerService().onAchievementUnlocked = (milestone) {
+      debugPrint('Achievement unlocked: ${milestone.title}');
+      _notificationService.showAchievementNotification(milestone);
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => OnboardingProvider()),
-        ChangeNotifierProvider(create: (_) => GamificationProvider()),
+        ChangeNotifierProvider.value(value: _gamificationProvider),
       ],
       child: MaterialApp(
+        navigatorKey: _navigatorKey,
         debugShowCheckedModeBanner: false,
         title: 'MYQuitMate',
         theme: _buildTheme(),

@@ -3,8 +3,6 @@ import 'package:provider/provider.dart';
 
 import '../../state/onboarding_provider.dart';
 import '../../models/onboarding_models.dart';
-import '../../services/firestore_service.dart';
-import '../../services/auth_service.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
   const ProfileSetupScreen({super.key});
@@ -48,7 +46,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     super.dispose();
   }
 
-  void _saveAndNext() async {
+  void _saveAndNext() {
     if (!_formKey.currentState!.validate()) return;
 
     // Get values directly from form controllers instead of provider
@@ -81,66 +79,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
     context.read<OnboardingProvider>().notifyProfileUpdated();
 
-    // Save to Firebase
-    final authService = AuthService();
-    final user = authService.currentUser;
-
-    if (user != null) {
-      final firestoreService = FirestoreService();
-
-      try {
-        // Show loading
-        if (!mounted) return;
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => const Center(
-            child: CircularProgressIndicator(),
-          ),
-        );
-
-        // Build data map with only non-null values
-        final Map<String, dynamic> data = {
-          'email': user.email,
-          'name': name,
-          'onboardingComplete': true, // Mark onboarding as complete
-          'createdAt': DateTime.now().toIso8601String(),
-          'updatedAt': DateTime.now().toIso8601String(),
-        };
-
-        // Only add optional fields if they have values
-        if (age != null) data['age'] = age;
-        if (_gender != null) data['gender'] = _gender!.name;
-        if (race != null) data['race'] = race;
-        if (_education != null) data['education'] = _education!.name;
-        if (occupation != null) data['occupation'] = occupation;
-
-        // Save profile data to Firestore
-        await firestoreService.saveUserProfile(
-          userId: user.uid,
-          data: data,
-        );
-
-        // Close loading dialog
-        if (!mounted) return;
-        Navigator.of(context).pop();
-
-        // Navigate to dashboard
-        Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
-      } catch (e) {
-        // Close loading dialog
-        if (!mounted) return;
-        Navigator.of(context).pop();
-
-        // Show error
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error saving profile: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
+    // Navigate to next onboarding screen (Smoking Habits)
+    Navigator.pushNamed(context, '/onboarding/habits');
   }
 
   @override
@@ -268,8 +208,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                       Expanded(
                         child: FilledButton.icon(
                           onPressed: _saveAndNext,
-                          icon: const Icon(Icons.check),
-                          label: const Text('Complete Setup'),
+                          icon: const Icon(Icons.arrow_forward),
+                          label: const Text('Save & Continue'),
                         ),
                       ),
                     ],

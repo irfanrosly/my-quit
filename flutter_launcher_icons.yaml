@@ -1,0 +1,30 @@
+# Flutter Launcher Icons Configuration
+# Run: flutter pub run flutter_launcher_icons
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  remove_alpha_ios: true  # Required for App Store submission
+  windows:
+    generate: false
+  linux:
+    generate: false
+
+  # Path to the icon image
+  image_path: "assets/MYQuitMate.png"
+
+  # Android adaptive icon (provides better Android 8.0+ support)
+  adaptive_icon_background: "#2FBF71"  # App's primary green color
+  adaptive_icon_foreground: "assets/MYQuitMate.png"
+
+  # Web favicon
+  web:
+    generate: true
+    image_path: "assets/MYQuitMate.png"
+    background_color: "#2FBF71"
+    theme_color: "#2FBF71"
+
+  # macOS app icon
+  macos:
+    generate: true
+    image_path: "assets/MYQuitMate.png"

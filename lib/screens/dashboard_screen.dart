@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 // Services
 import '../services/auth_service.dart';
+import '../services/achievement_tracker_service.dart';
 
 // Providers
 import '../state/gamification_provider.dart';
@@ -15,6 +16,8 @@ import '../state/onboarding_provider.dart';
 import 'progress_screen.dart';
 import 'craving_toolkit_screen.dart';
 import 'badges_screen.dart';
+import 'achievement_detail_screen.dart';
+import 'achievement_testing_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -28,7 +31,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
   late AnimationController _headerController;
   late AnimationController _statsController;
   late List<AnimationController> _actionControllers;
-  bool _isRefreshing = false;
+  AchievementMilestone? _nextMilestone;
 
   @override
   void initState() {
@@ -50,6 +53,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     );
 
     _loadDays();
+    _loadNextMilestone();
     _headerController.forward();
     _statsController.forward();
 
@@ -61,6 +65,18 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
         });
       }
     });
+
+    // Start achievement tracking
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<GamificationProvider>().startActiveTracking();
+    });
+  }
+
+  Future<void> _loadNextMilestone() async {
+    final milestone = await context.read<GamificationProvider>().getNextMilestone();
+    if (mounted) {
+      setState(() => _nextMilestone = milestone);
+    }
   }
 
   @override
@@ -111,12 +127,12 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          setState(() => _isRefreshing = true);
           HapticFeedback.mediumImpact();
           await _loadDays();
+          await context.read<GamificationProvider>().checkAchievementsNow();
           context.read<GamificationProvider>().sync(days: daysToShow, saved: moneySaved);
+          await _loadNextMilestone();
           await Future.delayed(const Duration(milliseconds: 500));
-          if (mounted) setState(() => _isRefreshing = false);
           HapticFeedback.lightImpact();
         },
         child: ListView(
@@ -228,6 +244,28 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
             ),
             const SizedBox(height: 12),
 
+            // Cigarettes Not Smoked card
+            FadeTransition(
+              opacity: _statsController,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(-0.5, 0),
+                  end: Offset.zero,
+                ).animate(CurvedAnimation(
+                  parent: _statsController,
+                  curve: Curves.easeOutCubic,
+                )),
+                child: _StatCard(
+                  title: 'Cigarettes Not Smoked',
+                  value: '${(o.state.habits.cigarettesPerDay ?? 0) * daysToShow}',
+                  subtitle: daysToShow > 0 ? 'Your lungs thank you!' : 'Start your journey',
+                  icon: Icons.smoke_free,
+                  color: Colors.red,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+
             // Points card
             FadeTransition(
               opacity: _statsController,
@@ -294,6 +332,26 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
             ),
 
             const SizedBox(height: 24),
+
+            // Next Milestone Tracker
+            if (_nextMilestone != null)
+              FadeTransition(
+                opacity: _statsController,
+                child: GestureDetector(
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const AchievementDetailScreen()),
+                    );
+                  },
+                  child: _NextMilestoneCard(
+                    milestone: _nextMilestone!,
+                    currentDays: daysToShow,
+                  ),
+                ),
+              ),
+            if (_nextMilestone != null) const SizedBox(height: 24),
+
             Row(
               children: [
                 Icon(Icons.touch_app, size: 20, color: Colors.grey[700]),
@@ -343,16 +401,6 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                 ),
                 _buildAnimatedAction(
                   2,
-                  Icons.flag,
-                  Colors.orange,
-                  'Start Plan',
-                  () {
-                    HapticFeedback.lightImpact();
-                    Navigator.pushNamed(context, '/onboarding/profile');
-                  },
-                ),
-                _buildAnimatedAction(
-                  3,
                   Icons.emoji_events,
                   Colors.purple,
                   'Badges',
@@ -360,6 +408,18 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                     HapticFeedback.lightImpact();
                     Navigator.of(context).push(
                       MaterialPageRoute(builder: (_) => const BadgesScreen()),
+                    );
+                  },
+                ),
+                _buildAnimatedAction(
+                  3,
+                  Icons.science,
+                  Colors.orange,
+                  'Test Tool',
+                  () {
+                    HapticFeedback.lightImpact();
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const AchievementTestingScreen()),
                     );
                   },
                 ),
@@ -581,6 +641,152 @@ class _ActionTileState extends State<_ActionTile> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// Next Milestone Card widget
+class _NextMilestoneCard extends StatelessWidget {
+  final AchievementMilestone milestone;
+  final int currentDays;
+
+  const _NextMilestoneCard({
+    required this.milestone,
+    required this.currentDays,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final currentHours = currentDays * 24;
+    final progress = (currentHours / milestone.requiredHours).clamp(0.0, 1.0);
+    final hoursRemaining = milestone.requiredHours - currentHours;
+    final daysRemaining = (hoursRemaining / 24).ceil();
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.deepPurple.shade400,
+            Colors.deepPurple.shade600,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.deepPurple.withOpacity(0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.flag, color: Colors.white, size: 24),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Next Achievement',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      milestone.title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${daysRemaining}d left',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Progress bar
+          Stack(
+            children: [
+              Container(
+                height: 12,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+              FractionallySizedBox(
+                widthFactor: progress,
+                child: Container(
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(6),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.white.withOpacity(0.5),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '${(progress * 100).toInt()}% complete',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.9),
+                  fontSize: 12,
+                ),
+              ),
+              Text(
+                '${milestone.requiredDays} days goal',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.9),
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

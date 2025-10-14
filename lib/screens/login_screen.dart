@@ -79,12 +79,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Icon(
-                    Icons.favorite,
-                    size: 80,
-                    color: Theme.of(context).colorScheme.primary,
+                  // App Logo
+                  Image.asset(
+                    'assets/MYQuitMate.png',
+                    width: 150,
+                    height: 150,
                   ),
-                  const SizedBox(height: 24),
                   Text(
                     'MYQuitMate',
                     style: Theme.of(context).textTheme.headlineMedium,

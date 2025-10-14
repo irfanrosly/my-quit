@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../state/onboarding_provider.dart';
 import '../../models/onboarding_models.dart';
+import '../../services/firebase_achievement_service.dart';
+import '../../services/firestore_service.dart';
+import '../../services/auth_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class OnboardingSummaryScreen extends StatelessWidget {
@@ -152,13 +155,50 @@ class OnboardingSummaryScreen extends StatelessWidget {
           if (h.dailyCost > 0) ...[
             const SizedBox(height: 8),
             Card(
-              child: ListTile(
-                leading: const Icon(Icons.savings_outlined, color: Colors.green),
-                title: const Text('Estimated Savings'),
-                subtitle: Text(
-                  'Daily: RM ${h.dailyCost.toStringAsFixed(2)} • '
-                  'Monthly: RM ${h.monthlyCost.toStringAsFixed(2)} • '
-                  'Annual: RM ${h.annualCost.toStringAsFixed(2)}',
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.savings_outlined, color: Colors.green, size: 24),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Estimated Savings When You Quit',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    if (h.dailyCigCost > 0)
+                      _SavingsRow(
+                        label: 'Cigarettes',
+                        daily: h.dailyCigCost,
+                        monthly: h.dailyCigCost * 30,
+                        annual: h.dailyCigCost * 365,
+                      ),
+                    if (h.dailyCigCost > 0 && h.dailyVapeCost > 0) const SizedBox(height: 8),
+                    if (h.dailyVapeCost > 0)
+                      _SavingsRow(
+                        label: 'Vape',
+                        daily: h.dailyVapeCost,
+                        monthly: h.dailyVapeCost * 30,
+                        annual: h.dailyVapeCost * 365,
+                      ),
+                    if ((h.dailyCigCost > 0 && h.dailyVapeCost > 0) || h.dailyCost > 0) ...[
+                      const Divider(height: 24),
+                      _SavingsRow(
+                        label: 'Total',
+                        daily: h.dailyCost,
+                        monthly: h.monthlyCost,
+                        annual: h.annualCost,
+                        isTotal: true,
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ),
@@ -228,23 +268,188 @@ class OnboardingSummaryScreen extends StatelessWidget {
 
           FilledButton.icon(
   onPressed: () async {
-    final prefs = await SharedPreferences.getInstance();
-    final plan = context.read<OnboardingProvider>().state.plan;
+    final provider = context.read<OnboardingProvider>();
+    final prof = provider.state.profile;
+    final habits = provider.state.habits;
+    final plan = provider.state.plan;
 
     final chosen = plan.quitDate ?? DateTime.now();
     final midnight = DateTime(chosen.year, chosen.month, chosen.day);
-    await prefs.setInt('startDate', midnight.millisecondsSinceEpoch);
 
+    // Show loading
     if (!context.mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
 
-    // Always go to Dashboard even if you came from Welcome/Preview
-    Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
+    try {
+      // Save to local storage (offline-first)
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('startDate', midnight.millisecondsSinceEpoch);
+
+      // Save to Firebase (cloud sync)
+      final authService = AuthService();
+      final user = authService.currentUser;
+
+      if (user != null) {
+        final firestoreService = FirestoreService();
+
+        // Build complete onboarding data map
+        final Map<String, dynamic> data = {
+          'email': user.email,
+          'name': prof.name,
+          'onboardingComplete': true,
+          'createdAt': DateTime.now().toIso8601String(),
+          'updatedAt': DateTime.now().toIso8601String(),
+          // Profile data
+          'age': prof.age,
+          'gender': prof.gender?.name,
+          'race': prof.race,
+          'education': prof.education?.name,
+          'occupation': prof.occupation,
+          // Smoking habits data
+          'tobaccoProducts': habits.products.map((p) => p.name).toList(),
+          'cigarettesPerDay': habits.cigarettesPerDay,
+          'vapeSessionsPerDay': habits.vapeSessionsPerDay,
+          'ttfc': habits.ttfc?.name,
+          // Pricing data for accurate cost calculations
+          'pricePerPack': habits.pricePerPack,
+          'vapeSpendPerDay': habits.vapeSpendPerDay,
+          'dailyCost': habits.dailyCost,
+          'monthlyCost': habits.monthlyCost,
+          'annualCost': habits.annualCost,
+          // Quit plan data
+          'quitDate': midnight.toIso8601String(),
+          'readiness': plan.readiness,
+          'confidence': plan.confidence,
+          'motivations': plan.motivations,
+          'triggers': plan.triggers,
+          'supports': plan.supports,
+        };
+
+        // Remove null values
+        data.removeWhere((key, value) => value == null);
+
+        // Save all data to Firestore
+        await firestoreService.saveUserProfile(
+          userId: user.uid,
+          data: data,
+        );
+
+        // Also save quit date to achievement service
+        final firebaseAchievementService = FirebaseAchievementService();
+        await firebaseAchievementService.saveQuitDate(
+          userId: user.uid,
+          quitDate: midnight,
+        );
+
+        debugPrint('Complete onboarding data saved to Firebase');
+      }
+
+      // Close loading dialog
+      if (!context.mounted) return;
+      Navigator.of(context).pop();
+
+      // Navigate to Dashboard
+      Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
+    } catch (e) {
+      // Close loading dialog
+      if (!context.mounted) return;
+      Navigator.of(context).pop();
+
+      // Show error
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error saving onboarding data: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   },
   icon: const Icon(Icons.check),
   label: const Text('Finish & Go to Dashboard'),
 ),
         ],
       ),
+    );
+  }
+}
+
+// Savings Row Widget for displaying cost breakdown
+class _SavingsRow extends StatelessWidget {
+  final String label;
+  final double daily;
+  final double monthly;
+  final double annual;
+  final bool isTotal;
+
+  const _SavingsRow({
+    required this.label,
+    required this.daily,
+    required this.monthly,
+    required this.annual,
+    this.isTotal = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontWeight: isTotal ? FontWeight.bold : FontWeight.w600,
+            fontSize: isTotal ? 16 : 14,
+            color: isTotal ? Colors.green.shade700 : Colors.grey.shade700,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _CostLabel('Daily:', daily, isTotal),
+            _CostLabel('Monthly:', monthly, isTotal),
+            _CostLabel('Annual:', annual, isTotal),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _CostLabel extends StatelessWidget {
+  final String label;
+  final double amount;
+  final bool isTotal;
+
+  const _CostLabel(this.label, this.amount, this.isTotal);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: Colors.grey.shade600,
+          ),
+        ),
+        Text(
+          'RM ${amount.toStringAsFixed(2)}',
+          style: TextStyle(
+            fontWeight: isTotal ? FontWeight.bold : FontWeight.w600,
+            fontSize: isTotal ? 14 : 13,
+            color: isTotal ? Colors.green.shade800 : Colors.grey.shade800,
+          ),
+        ),
+      ],
     );
   }
 }

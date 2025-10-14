@@ -81,7 +81,12 @@ class WelcomeScreen extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.smoke_free, size: 84, color: Colors.white),
+                  // App Logo
+                  Image.asset(
+                    'assets/MYQuitMate.png',
+                    width: 50,
+                    height: 50,
+                  ),
                   const SizedBox(height: 16),
                   Text(
                     appName,
