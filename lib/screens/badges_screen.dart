@@ -8,63 +8,78 @@ class BadgesScreen extends StatelessWidget {
   // Master list semua badges + description + icon
   List<_BadgeMeta> get _allBadges => const [
   _BadgeMeta(
-    title: 'Day 1: Fresh Start',
+    title: '🌱 Day 1: Fresh Start',
     description: 'Smoke-free day one – the start of something great.',
     icon: Icons.wb_sunny_outlined,
   ),
   _BadgeMeta(
-    title: '72 Hours: Detox Hero',
+    title: '⏳ 72 Hours: Detox Hero',
     description: 'Day 3 – breathe easier and feel more energetic',
     icon: Icons.bolt_outlined,
   ),
   _BadgeMeta(
-    title: '1 Week: Stable Steps',
-    description: 'Week 1 - Lungs are working better and blood’s moving well.',
+    title: '🗓️ 1 Week Streak',
+    description: 'Week 1 - Lungs are working better and blood is moving well.',
     icon: Icons.directions_walk,
   ),
   _BadgeMeta(
-    title: '14 Days: Halfway Fortnight',
+    title: '💪 2 Weeks Strong',
     description: 'Week 2 - Momentum is getting stronger',
     icon: Icons.flag_circle_outlined,
   ),
   _BadgeMeta(
-    title: '3 Months: Clearer Breath',
+    title: '🌟 1 Month Milestone',
+    description: 'Month 1 - Your journey is taking shape!',
+    icon: Icons.star_outlined,
+  ),
+  _BadgeMeta(
+    title: '🔥 2 Months Momentum',
+    description: 'Month 2 - You are on fire with consistency!',
+    icon: Icons.local_fire_department_outlined,
+  ),
+  _BadgeMeta(
+    title: '🏆 3 Months Champion',
     description: 'Month 3 - Breathing gets easier, and appetite improves.',
     icon: Icons.air_outlined,
   ),
   _BadgeMeta(
-    title: '6 Months: Strong Will',
+    title: '🎯 6 Months Warrior',
     description: 'Month 6 - Resilience is clearly proven!',
     icon: Icons.shield_outlined,
   ),
   _BadgeMeta(
-    title: 'RM100 Saved',
+    title: '👑 1 Year Smoke-Free Legend',
+    description: 'One full year - You are a true champion!',
+    icon: Icons.workspace_premium,
+  ),
+  _BadgeMeta(
+    title: '💵 RM100 Saved',
     description: 'Your savings journey has begun!',
     icon: Icons.savings_outlined,
   ),
   _BadgeMeta(
-    title: 'RM500 Saved',
-    description: 'Your wallet’s smiling!',
+    title: '💰 RM500 Saved',
+    description: 'Your wallet is smiling!',
     icon: Icons.account_balance_wallet_outlined,
   ),
   _BadgeMeta(
-    title: 'RM1000 Saved',
-    description: 'Your money’s ready to work for you!',
+    title: '💎 RM1000 Saved',
+    description: 'Your money is ready to work for you!',
     icon: Icons.attach_money,
   ),
   _BadgeMeta(
-    title: '5 Mini-Tasks Completed',
-    description: 'Great coping',
+    title: '✅ 5 Cravings Managed',
+    description: 'Great coping skills!',
     icon: Icons.task_alt,
   ),
   _BadgeMeta(
-    title: '10 Mini-Tasks Completed',
-    description: 'Ten mini-tasks - consistent!',
+    title: '✅ 10 Cravings Managed',
+    description: 'Ten cravings managed - consistent!',
     icon: Icons.star_half,
   ),
   _BadgeMeta(
-    title: '20 Mini-Tasks Completed',
-    description: 'Twenty mini-tasks - champion!',
+    title: '✅ 20 Cravings Managed',
+    description: 'Twenty cravings managed - champion!',
     icon: Icons.workspace_premium_outlined,
   ),
   _BadgeMeta(
@@ -105,7 +120,7 @@ _BadgeMeta(
           // Grid badges
           GridView.count(
             crossAxisCount: 2,
-            childAspectRatio: 1.2,
+            childAspectRatio: 0.75,
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
             shrinkWrap: true,
@@ -140,34 +155,45 @@ class _BadgeTile extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(meta.icon, size: 36, color: color),
-            const SizedBox(height: 8),
+            Icon(meta.icon, size: 32, color: color),
+            const SizedBox(height: 6),
             Text(
               meta.title,
               textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontWeight: FontWeight.w600,
+                fontSize: 13,
                 color: color,
               ),
             ),
-            const SizedBox(height: 6),
-            Text(
-              meta.description,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
-                color: unlocked ? Colors.black87 : Colors.black54,
+            const SizedBox(height: 4),
+            Flexible(
+              child: Text(
+                meta.description,
+                textAlign: TextAlign.center,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: unlocked ? Colors.black87 : Colors.black54,
+                ),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Chip(
-              label: Text(unlocked ? 'Unlocked' : 'Locked'),
+              label: Text(
+                unlocked ? 'Unlocked' : 'Locked',
+                style: const TextStyle(fontSize: 11),
+              ),
               avatar: Icon(
                 unlocked ? Icons.check_circle : Icons.lock_outline,
-                size: 18,
+                size: 16,
                 color: unlocked ? Colors.green : Colors.grey,
               ),
               visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
             ),
           ],
         ),

@@ -51,11 +51,35 @@ class _AchievementTestingScreenState extends State<AchievementTestingScreen> {
       final prefs = await SharedPreferences.getInstance();
       final midnight = DateTime(quitDate.year, quitDate.month, quitDate.day);
 
-      // Save to local storage
+      // Clear all existing time-based achievements
+      await prefs.remove('unlocked_achievements');
+
+      // Clear Firebase achievements if user is logged in
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final firebaseService = FirebaseAchievementService();
+        await firebaseService.resetAllAchievements(user.uid);
+      }
+
+      // Clear time-based badges from gamification provider
+      final gamificationProvider = context.read<GamificationProvider>();
+      final timeBadges = [
+        '🌱 Day 1: Fresh Start',
+        '⏳ 72 Hours: Detox Hero',
+        '🗓️ 1 Week Streak',
+        '💪 2 Weeks Strong',
+        '🌟 1 Month Milestone',
+        '🔥 2 Months Momentum',
+        '🏆 3 Months Champion',
+        '🎯 6 Months Warrior',
+        '👑 1 Year Smoke-Free Legend',
+      ];
+      gamificationProvider.badges.removeWhere((badge) => timeBadges.contains(badge));
+
+      // Save new quit date to local storage
       await prefs.setInt('startDate', midnight.millisecondsSinceEpoch);
 
       // Save to Firebase if user is logged in
-      final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         final firebaseService = FirebaseAchievementService();
         await firebaseService.saveQuitDate(
@@ -64,8 +88,8 @@ class _AchievementTestingScreenState extends State<AchievementTestingScreen> {
         );
       }
 
-      // Trigger achievement check
-      await context.read<GamificationProvider>().checkAchievementsNow();
+      // Trigger achievement check for new date
+      await gamificationProvider.checkAchievementsNow();
 
       setState(() {
         _currentQuitDate = midnight;
@@ -441,6 +465,7 @@ class _AchievementTestingScreenState extends State<AchievementTestingScreen> {
                       ),
                       const SizedBox(height: 12),
                       Text(
+                        '• Clears all time-based badges when setting new date\n'
                         '• Changes both local storage and Firebase\n'
                         '• Automatically checks for new achievements\n'
                         '• Triggers celebration notifications\n'
