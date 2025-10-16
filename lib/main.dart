@@ -21,6 +21,7 @@ import 'screens/dashboard_screen.dart';
 import 'screens/progress_screen.dart';
 import 'screens/craving_toolkit_screen.dart';
 import 'screens/badges_screen.dart';
+import 'screens/profile_screen.dart';
 import 'screens/onboarding/profile_setup_screen.dart';
 import 'screens/onboarding/smoking_habits_screen.dart';
 import 'screens/onboarding/quit_plan_screen.dart';
@@ -91,6 +92,7 @@ class _MyQuitMateAppState extends State<MyQuitMateApp> {
           '/progress': (_) => const ProgressScreen(),
           '/badges': (_) => const BadgesScreen(),
           '/craving': (_) => const CravingToolkitScreen(),
+          '/profile': (_) => const ProfileScreen(),
 
           // Onboarding flow
           '/onboarding/profile': (_) => const ProfileSetupScreen(),
@@ -196,7 +198,7 @@ class AuthWrapper extends StatelessWidget {
         if (snapshot.hasData) {
           final user = snapshot.data!;
           return FutureBuilder<bool>(
-            future: _checkOnboardingStatus(user.uid),
+            future: _checkOnboardingAndLoadData(context, user.uid),
             builder: (context, onboardingSnapshot) {
               // Show loading while checking onboarding status
               if (onboardingSnapshot.connectionState == ConnectionState.waiting) {
@@ -227,8 +229,16 @@ class AuthWrapper extends StatelessWidget {
     );
   }
 
-  Future<bool> _checkOnboardingStatus(String userId) async {
+  Future<bool> _checkOnboardingAndLoadData(BuildContext context, String userId) async {
     final firestoreService = FirestoreService();
-    return await firestoreService.hasCompletedOnboarding(userId);
+    final hasCompleted = await firestoreService.hasCompletedOnboarding(userId);
+
+    // If user has completed onboarding, load their data
+    if (hasCompleted) {
+      final onboardingProvider = context.read<OnboardingProvider>();
+      await onboardingProvider.loadUserData(userId);
+    }
+
+    return hasCompleted;
   }
 }

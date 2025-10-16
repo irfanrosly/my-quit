@@ -1,4 +1,5 @@
 import '../chatbot/myquitmate_chatbot.dart';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,6 +7,7 @@ import 'package:provider/provider.dart';
 
 // Services
 import '../services/auth_service.dart';
+import '../services/firestore_service.dart';
 import '../services/achievement_tracker_service.dart';
 
 // Providers
@@ -28,6 +30,7 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> with TickerProviderStateMixin {
   int _days = 0;
+  int _relapseCount = 0;
   late AnimationController _headerController;
   late AnimationController _statsController;
   late List<AnimationController> _actionControllers;
@@ -53,6 +56,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     );
 
     _loadDays();
+    _loadRelapseCount();
     _loadNextMilestone();
     _headerController.forward();
     _statsController.forward();
@@ -96,6 +100,150 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     final d = DateTime.now().difference(DateTime(sd.year, sd.month, sd.day)).inDays;
     if (!mounted) return;
     setState(() => _days = d < 0 ? 0 : d);
+  }
+
+  Future<void> _loadRelapseCount() async {
+    final authService = AuthService();
+    final user = authService.currentUser;
+    int count = 0;
+
+    if (user != null) {
+      try {
+        // Always load from Firestore first (user-specific data)
+        final firestoreService = FirestoreService();
+        final data = await firestoreService.getUserProfile(user.uid);
+        if (data != null && data['relapseCount'] != null) {
+          count = data['relapseCount'] as int;
+          // Update local cache for this user
+          final p = await SharedPreferences.getInstance();
+          await p.setInt('relapseCount_${user.uid}', count);
+        }
+      } catch (e) {
+        debugPrint('Error loading relapse count from Firestore: $e');
+        // Fallback to local cache if Firestore fails
+        final p = await SharedPreferences.getInstance();
+        count = p.getInt('relapseCount_${user.uid}') ?? 0;
+      }
+    }
+
+    if (!mounted) return;
+    setState(() => _relapseCount = count);
+  }
+
+  Future<void> _incrementRelapseCount() async {
+    final amountController = TextEditingController(text: '1');
+
+    final result = await showDialog<Map<String, dynamic>?>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Track Slip-Up'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Did you smoke? It\'s okay, we\'ll track it and keep moving forward.'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: amountController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'How many cigarettes?',
+                hintText: 'Enter amount',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, null),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final amount = int.tryParse(amountController.text) ?? 1;
+              Navigator.pop(context, {'confirmed': true, 'amount': amount});
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.orange,
+            ),
+            child: const Text('Yes, I smoked'),
+          ),
+        ],
+      ),
+    );
+
+    amountController.dispose();
+
+    if (result != null && result['confirmed'] == true) {
+      final amount = result['amount'] as int;
+      final authService = AuthService();
+      final user = authService.currentUser;
+
+      if (user == null) return;
+
+      final newCount = _relapseCount + 1;
+
+      // Get today's date as key
+      final today = DateTime.now();
+      final dateKey = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+
+      // Get existing daily amounts map from Firestore
+      Map<String, dynamic> dailyAmounts = {};
+      try {
+        final firestoreService = FirestoreService();
+        final data = await firestoreService.getUserProfile(user.uid);
+        if (data != null && data['dailyRelapseAmounts'] != null) {
+          dailyAmounts = Map<String, dynamic>.from(data['dailyRelapseAmounts']);
+        }
+      } catch (e) {
+        debugPrint('Error loading daily amounts: $e');
+      }
+
+      // Add today's amount to existing amount (if any)
+      final currentAmount = dailyAmounts[dateKey] ?? 0;
+      dailyAmounts[dateKey] = currentAmount + amount;
+
+      // Save to Firestore (primary storage)
+      try {
+        final firestoreService = FirestoreService();
+        await firestoreService.saveUserProfile(
+          userId: user.uid,
+          data: {
+            'relapseCount': newCount,
+            'lastRelapseDate': today.toIso8601String(),
+            'dailyRelapseAmounts': dailyAmounts,
+          },
+        );
+
+        // Update local cache for this user
+        final p = await SharedPreferences.getInstance();
+        await p.setInt('relapseCount_${user.uid}', newCount);
+        await p.setString('dailyRelapseAmounts_${user.uid}', json.encode(dailyAmounts));
+      } catch (e) {
+        debugPrint('Error saving relapse to Firestore: $e');
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to save. Please check your connection.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      if (!mounted) return;
+      setState(() => _relapseCount = newCount);
+
+      HapticFeedback.mediumImpact();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Tracked $amount cigarette${amount > 1 ? 's' : ''}. Remember, progress isn\'t perfect!'),
+          backgroundColor: Colors.orange.shade700,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
   }
 
   @override
@@ -179,11 +327,47 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                           ),
                           const SizedBox(width: 12),
                           Expanded(
-                            child: Text(
-                              'Welcome Back!',
-                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                            child: InkWell(
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                Navigator.pushNamed(context, '/profile');
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 4),
+                                child: o.state.profile.name.isNotEmpty
+                                    ? Text.rich(
+                                        TextSpan(
+                                          children: [
+                                            TextSpan(
+                                              text: 'Welcome Back, ',
+                                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                            ),
+                                            TextSpan(
+                                              text: '${o.state.profile.name}',
+                                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Colors.blue.shade700,
+                                                  ),
+                                            ),
+                                            TextSpan(
+                                              text: '!',
+                                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                            ),
+                                          ],
+                                        ),
+                                      )
+                                    : Text(
+                                        'Welcome Back!',
+                                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                      ),
+                              ),
                             ),
                           ),
                         ],
@@ -333,6 +517,119 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
 
             const SizedBox(height: 24),
 
+            // Relapse Tracking Section
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Track Slip-Up Button Card
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: _incrementRelapseCount,
+                      child: Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Colors.orange.shade400, Colors.deepOrange.shade500],
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.orange.withOpacity(0.3),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.3),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.smoking_rooms, color: Colors.white, size: 28),
+                            ),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'I Smoked',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Tap to track',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.9),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Slip-Up Counter Card
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.orange.withOpacity(0.3), width: 2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.orange.withOpacity(0.1),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withOpacity(0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(Icons.numbers, color: Colors.orange.shade700, size: 28),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            '$_relapseCount',
+                            style: TextStyle(
+                              color: Colors.orange.shade700,
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _relapseCount == 1 ? 'Slip-up' : 'Slip-ups',
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
             // Next Milestone Tracker
             if (_nextMilestone != null)
               FadeTransition(
@@ -416,11 +713,23 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                   Icons.science,
                   Colors.orange,
                   'Test Tool',
-                  () {
+                  () async {
                     HapticFeedback.lightImpact();
-                    Navigator.of(context).push(
+                    await Navigator.of(context).push(
                       MaterialPageRoute(builder: (_) => const AchievementTestingScreen()),
                     );
+                    // Refresh data when returning from test tool
+                    if (mounted) {
+                      await _loadDays();
+                      final g = context.read<GamificationProvider>();
+                      final o = context.read<OnboardingProvider>();
+                      final updatedDays = (g.smokeFreeDays > 0) ? g.smokeFreeDays : _days;
+                      final updatedMoneySaved = o.state.habits.dailyCost * updatedDays;
+                      await g.checkAchievementsNow();
+                      g.sync(days: updatedDays, saved: updatedMoneySaved);
+                      await _loadNextMilestone();
+                      setState(() {});
+                    }
                   },
                 ),
               ],
